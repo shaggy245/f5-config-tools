@@ -7,22 +7,27 @@ open VIPS, '<vs.out';
 
 while (<VIPS>) {
   chomp;
-  my($vs_name, $vs_dest, $pool_name) = /ltm virtual (.*?) \{ destination (.*?) pool (.*)/;
+  my($vs_name, $vs_dest, $pool_name) = /ltm virtual (.*?) \{ destination (.*?):.+? pool (.*) /;
   open POOLS, '<pools.out';
   foreach $line (<POOLS>) {
     chomp $line;
     # surround pool_name with spaces for search
     if (index($line, '' . $pool_name . '') >= 0) {
       @pool_line = split /{ /, $line;
-      $members = @pool_line[1];
+      @members = split / /, @pool_line[1];
     }
   }
   close POOLS;
-  print "VS:\t\t$vs_name\n";
-  print "Dest:\t\t$vs_dest\n";
-  print "Pool:\t\t$pool_name\n";
-  print "Members:\t$members\n";
-  print "\n";
+  foreach $member (@members) {
+    print "$vs_name $vs_dest $pool_name $member\n";
+  }
+  #print "VS:\t\t$vs_name\n";
+  #print "Dest:\t\t$vs_dest\n";
+  #print "Pool:\t\t$pool_name\n";
+  #print "Members:\n";
+  #print "$members\n";
+
+  #print "\n";
 }
 
 close VIPS;
