@@ -12,7 +12,7 @@ while (<VIPS>) {
   foreach $line (<POOLS>) {
     chomp $line;
     # surround pool_name with spaces for search
-    if (index($line, '' . $pool_name . '') >= 0) {
+    if (index($line, ' ' . $pool_name . ' ') >= 0) {
       @pool_line = split /{ /, $line;
       @members = split / /, @pool_line[1];
     }
