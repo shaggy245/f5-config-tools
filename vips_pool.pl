@@ -2,7 +2,7 @@
 ## and the other with F5 pool data (command to gather info below). Munges the config info to see
 ## vs-name, destination, pool-name, and pool members
 # tmsh list ltm virtual destination | grep -E "ltm virtual|destination" | tr '\n' ' ' | sed 's/ltm virtual/\nltm virtual/g;s/\s\+/ /g' | grep -v "pool none" > vs.out
-# tmsh list ltm pool | grep -E "ltm pool|address" | | tr '\n' ' ' | sed 's/ltm pool/\nltm pool/g;s/\s\+/ /g' > pools.out
+# tmsh list ltm pool | grep -E "ltm pool|address" | tr '\n' ' ' | sed 's/ltm pool/\nltm pool/g;s/ \+/ /g;s/ address / /g'
 open VIPS, '<vs.out';
 
 while (<VIPS>) {
