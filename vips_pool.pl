@@ -7,7 +7,10 @@ open VIPS, '<vs.out';
 
 while (<VIPS>) {
   chomp;
-  my($vs_name, $vs_dest, $pool_name) = /ltm virtual (.*?) \{ destination (.*?):.+? pool (.*) /;
+  my($vs_name, $vs_dest, $pool_name) = /ltm virtual (.*?) \{ destination (.*?):.+? pool (.*)(\s|$)/;
+  if ($pool_name == " ") {
+	  print $pool_name;
+  }
   open POOLS, '<pools.out';
   foreach $line (<POOLS>) {
     chomp $line;
