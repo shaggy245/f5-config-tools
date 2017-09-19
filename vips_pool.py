@@ -1,12 +1,14 @@
 import sys
 import requests
-import json
 import getpass
 import argparse
 import logging
 import collections
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+# Global Variables
+GL_KIND = {"VIP": "tm:ltm:virtual-address:virtual-addressstate", "VS": "tm:ltm:virtual:virtualstate", "POOL": "tm:ltm:pool:poolstate", "SNATPOOL": "tm:ltm:snatpool:snatpoolstate", "SNATTRANS": "tm:ltm:snat-translation:snat-translationstate"}
 
 
 def userpass(username):
@@ -48,14 +50,14 @@ def icontrol_request(url,method,body,auth):
 def create_struct(f5_response):
     """Create dictionary for each set of items.
 
-    The key of each item will be the 'kind' of item + ':' + 'fullPath' of item
+    The key of each item will be the 'kind' of item +  'fullPath' of item
     and the value will be the associated json payload as a defaultdict. The
     'kind' optins can be seen in the print_things function.
     """
     try:
         f5_response_dict = {}
         for item in f5_response.json()["items"]:
-            f5_response_dict[item["kind"] + ":" + item["fullPath"]] = collections.defaultdict(str,item)
+            f5_response_dict[item["kind"] + item["fullPath"]] = collections.defaultdict(str,item)
         return f5_response_dict
     except Exception as exc:
         print exc
@@ -108,29 +110,29 @@ def print_things(all_things):
         print "######################################################"
         print thing["kind"]
         print thing["fullPath"]
-        if thing["kind"] == "tm:ltm:virtual-address:virtual-addressstate":
+        if thing["kind"] == GL_KIND["VIP"]:
             print thing["address"]
             print thing["trafficGroup"]
-        elif thing["kind"] == "tm:ltm:virtual:virtualstate":
+        elif thing["kind"] == GL_KIND["VS"]:
             print thing["destination"]
             print thing["pool"]
             # Convert sourceAddressTranslation into defaultdict in case pool doesn't exist
             print collections.defaultdict(str,thing["sourceAddressTranslation"])["pool"]
-        elif thing["kind"] == "tm:ltm:pool:poolstate":
+        elif thing["kind"] == GL_KIND["POOL"]:
             # Convert membersReference into defaultdict in case items doesn't exist
             for member in collections.defaultdict(str,thing["membersReference"])["items"]:
                 print member["address"]
-        elif thing["kind"] == "tm:ltm:snat-translation:snat-translationstate":
+        elif thing["kind"] == GL_KIND["SNATTRANS"]:
             print thing["address"]
             print thing["trafficGroup"]
-        elif thing["kind"] == "tm:ltm:snatpool:snatpoolstate":
+        elif thing["kind"] == GL_KIND["SNATPOOL"]:
             for member in thing["members"]:
                 print member
 
 
 def tie_together(vs_s, all_things):
-    """Create a list of lists that combine virtual servers with associated
-    virtual addresses, snat-pools, snat-translations, pools, and pool members.
+    """Tie vs/pool items together for TG/SNAT validation
+    Group items by virtual-address - find all vs's and associated pools for a particular virtual-address
     """
     grouped_items = []
     for vs in vs_s.values():
@@ -152,4 +154,5 @@ if __name__ == "__main__":
     auth = userpass(args.username)
 
     all_vs, all_responses = get_things(args.f5,auth)
-    tie_together(all_vs, all_responses)
+    print_things(all_responses.values())
+    #tie_together(all_vs, all_responses)
