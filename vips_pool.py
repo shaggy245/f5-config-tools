@@ -3,7 +3,6 @@ import requests
 import getpass
 import argparse
 import logging
-import collections
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -57,7 +56,7 @@ def create_struct(f5_response):
     try:
         f5_response_dict = {}
         for item in f5_response.json()["items"]:
-            f5_response_dict[item["kind"] + item["fullPath"]] = collections.defaultdict(str,item)
+            f5_response_dict[item["kind"] + item["fullPath"]] = item
         return f5_response_dict
     except Exception as exc:
         print exc
@@ -66,7 +65,7 @@ def create_struct(f5_response):
         sys.exit(0)
 
 
-def merge_dicts(*dict_args):
+def merge_dicts(dict_args):
     """
     Given any number of dicts, shallow copy and merge into a new dict,
     precedence goes to key value pairs in latter dicts.
@@ -96,9 +95,8 @@ def get_things(host,auth):
         all_snatpools_response = create_struct(icontrol_request(all_snatpools_url,"GET","",auth))
         all_snattrans_response = create_struct(icontrol_request(all_snattrans_url,"GET","",auth))
 
-        all_things = merge_dicts(all_vs_response, all_pool_response, all_vips_response, all_snatpools_response, all_snattrans_response)
-        return all_vs_response, all_things
-
+        all_things = {"vs_s": all_vs_response, "pools": all_pool_response, "vips": all_vips_response, "snatpools": all_snatpools_response, "snattrans": all_snattrans_response}
+        return all_things
     except Exception as exc:
         print exc
         sys.exit(0)
@@ -106,7 +104,7 @@ def get_things(host,auth):
 
 def print_things(all_things):
     """Print to screen for each F5 config item based on 'kind'"""
-    for thing in all_things:
+    for k, thing in all_things.items():
         print "######################################################"
         print thing["kind"]
         print thing["fullPath"]
@@ -115,13 +113,14 @@ def print_things(all_things):
             print thing["trafficGroup"]
         elif thing["kind"] == GL_KIND["VS"]:
             print thing["destination"]
-            print thing["pool"]
-            # Convert sourceAddressTranslation into defaultdict in case pool doesn't exist
-            print collections.defaultdict(str,thing["sourceAddressTranslation"])["pool"]
+            print thing.get("pool", "none")
+            print thing["sourceAddressTranslation"].get("pool", "none")
         elif thing["kind"] == GL_KIND["POOL"]:
-            # Convert membersReference into defaultdict in case items doesn't exist
-            for member in collections.defaultdict(str,thing["membersReference"])["items"]:
-                print member["address"]
+            # Iterate over pool members if they exist and
+            for member in thing["membersReference"].get("items", "none"):
+                # Check if member is a dict before trying to print
+                if isinstance(member, dict):
+                    print member["address"]
         elif thing["kind"] == GL_KIND["SNATTRANS"]:
             print thing["address"]
             print thing["trafficGroup"]
@@ -135,9 +134,11 @@ def tie_together(vs_s, all_things):
     Group items by virtual-address - find all vs's and associated pools for a particular virtual-address
     """
     grouped_items = []
-    for vs in vs_s.values():
-        pass
-
+    # Iterate of vs_s items and start grouping things together
+    for k, v in vs_s.items():
+        temp_group = []
+        temp_group.append(v)
+        temp_group.append(all_things[GL_KIND["vip"] + v["destination"].split(":")[0]])
 
 
 if __name__ == "__main__":
@@ -153,6 +154,5 @@ if __name__ == "__main__":
     # If no username supplied in args, ask for username and get password
     auth = userpass(args.username)
 
-    all_vs, all_responses = get_things(args.f5,auth)
-    print_things(all_responses.values())
-    #tie_together(all_vs, all_responses)
+    all_responses = get_things(args.f5,auth)
+    print_things(merge_dicts(all_responses.values()))
