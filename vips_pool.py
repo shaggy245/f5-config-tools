@@ -56,7 +56,7 @@ def create_struct(f5_response):
     try:
         f5_response_dict = {}
         for item in f5_response.json()["items"]:
-            f5_response_dict[item["kind"] + item["fullPath"]] = item
+            f5_response_dict[str(item["fullPath"])] = item
         return f5_response_dict
     except Exception as exc:
         print exc
@@ -95,7 +95,7 @@ def get_things(host,auth):
         all_snatpools_response = create_struct(icontrol_request(all_snatpools_url,"GET","",auth))
         all_snattrans_response = create_struct(icontrol_request(all_snattrans_url,"GET","",auth))
 
-        all_things = {"vs_s": all_vs_response, "pools": all_pool_response, "vips": all_vips_response, "snatpools": all_snatpools_response, "snattrans": all_snattrans_response}
+        all_things = {"vss": all_vs_response, "pools": all_pool_response, "vips": all_vips_response, "snatpools": all_snatpools_response, "snattrans": all_snattrans_response}
         return all_things
     except Exception as exc:
         print exc
@@ -104,41 +104,67 @@ def get_things(host,auth):
 
 def print_things(all_things):
     """Print to screen for each F5 config item based on 'kind'"""
+    print "######################################################"
     for k, thing in all_things.items():
         print "######################################################"
-        print thing["kind"]
-        print thing["fullPath"]
+        print k, thing["kind"]
+        print k, thing["fullPath"]
         if thing["kind"] == GL_KIND["VIP"]:
-            print thing["address"]
-            print thing["trafficGroup"]
+            print k, thing["address"]
+            print k, thing["trafficGroup"]
         elif thing["kind"] == GL_KIND["VS"]:
-            print thing["destination"]
-            print thing.get("pool", "none")
-            print thing["sourceAddressTranslation"].get("pool", "none")
+            print k, thing["destination"]
+            print k, thing.get("pool", "none")
+            print k, thing["sourceAddressTranslation"].get("pool", "none")
         elif thing["kind"] == GL_KIND["POOL"]:
             # Iterate over pool members if they exist and
             for member in thing["membersReference"].get("items", "none"):
                 # Check if member is a dict before trying to print
                 if isinstance(member, dict):
-                    print member["address"]
+                    print k, member["address"]
         elif thing["kind"] == GL_KIND["SNATTRANS"]:
-            print thing["address"]
-            print thing["trafficGroup"]
+            print k, thing["address"]
+            print k, thing["trafficGroup"]
         elif thing["kind"] == GL_KIND["SNATPOOL"]:
             for member in thing["members"]:
-                print member
+                print k, member
 
 
-def tie_together(vs_s, all_things):
+def tie_together(all_things):
     """Tie vs/pool items together for TG/SNAT validation
     Group items by virtual-address - find all vs's and associated pools for a particular virtual-address
     """
-    grouped_items = []
-    # Iterate of vs_s items and start grouping things together
-    for k, v in vs_s.items():
-        temp_group = []
-        temp_group.append(v)
-        temp_group.append(all_things[GL_KIND["vip"] + v["destination"].split(":")[0]])
+    grouped_items = {}
+    # Iterate over vss items and start grouping things together
+    for k, vs in all_things["vss"].items():
+        vip_id = str(vs["destination"].split(":")[0])
+        vs_id = k
+        pool_id = vs.get("pool", "none")
+        snatpool_id = vs["sourceAddressTranslation"].get("pool", "none")
+
+        # Add VIP item
+        if vip_id in grouped_items.keys():
+            # If VIP already exists in grouped_items, then we don't need to do
+            # anything else
+            #grouped_items[vip_id][vip_id] = all_things["vips"].get(vip_id, "none")
+            pass
+        else:
+            grouped_items[vip_id] = {}
+            grouped_items[vip_id][GL_KIND["VIP"] + vip_id] = all_things["vips"].get(vip_id, "none")
+        # Add VS item
+        grouped_items[vip_id][GL_KIND["VS"] + vs_id] = vs
+        # Add pool item
+        if pool_id!="none":
+            grouped_items[vip_id][GL_KIND["POOL"] + pool_id] = all_things["pools"].get(pool_id, "none")
+        # Add snatpool item
+        if snatpool_id!="none":
+            grouped_items[vip_id][GL_KIND["SNATPOOL"] + snatpool_id] = all_things["snatpools"].get(snatpool_id, "none")
+            snattrans_id = grouped_items[vip_id][GL_KIND["SNATPOOL"] + snatpool_id]["members"]
+            for trans_id in snattrans_id:
+                grouped_items[vip_id][GL_KIND["SNATTRANS"] + trans_id] = all_things["snattrans"].get(trans_id, "none")
+
+    for k,item in grouped_items.items():
+        print_things(item)
 
 
 if __name__ == "__main__":
@@ -155,4 +181,7 @@ if __name__ == "__main__":
     auth = userpass(args.username)
 
     all_responses = get_things(args.f5,auth)
-    print_things(merge_dicts(all_responses.values()))
+    tie_together(all_responses)
+    #print_things(all_responses["vips"])
+    #print all_responses["vips"].keys()
+    #print_things(merge_dicts(all_responses.values()))
